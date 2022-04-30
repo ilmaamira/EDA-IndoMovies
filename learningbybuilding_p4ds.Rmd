@@ -1,0 +1,517 @@
+---
+title: "A Simple Exploratory Data Analysis on Indonesian Movies"
+subtitle: "using IMDb User's Rating Dataset"
+author: "by Ilma Amira"
+date: "`r Sys.Date()`"
+output:  
+  rmdformats::readthedown:
+  toc_float: true
+---
+
+<style type="text/css">
+body{text-align: justify;}
+h1{text-align: left;}
+h2{text-align: left;}
+</style>
+
+
+```{r, echo=FALSE}
+library(knitr)
+library(DT)
+library(rmdformats)
+library(stringr)
+library(kableExtra)
+library(data.table)
+library(tidyr)
+library(downloadthis)
+```
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, echo=FALSE, out.width='50%', fig.align='center'}
+knitr::include_graphics("assets/EDA.jpg")
+```
+
+# A. What is Exploratory Data Analysis (EDA) ? 
+Imagine if you're in the cinema, but you don't know what movie you're going to watch. Surely you will experience an inner conflict within yourself, "what movie that is worth to watch?"; and maybe lead to some further questions such: which movie has the good plot, are the casts and crews famous, how the ratings and reviews proceed, etc. Hence, in order to answer those questions, you can explore the information from internet, or you can do a quick survey and ask some of your friends. Whatever investigating process you would take to gain those questions' answers, data scientists often call it as ‘Exploratory Data Analysis’.
+
+<style>
+div.blue { background-color:#e6f0ff; border-radius: 5px; padding: 20px;}
+</style>
+<div class = "blue">Exploratory Data Analysis is a process of examining or understanding the data and extracting insights or main characteristics of the data. In other words, Exploratory Data Analysis refers to the critical process of performing initial investigations on data so as to discover patterns, to spot anomalies, to test hypothesis, and to check assumptions with the help of summary statistics or graphical representations. According to Howard Seltman from Carnegie Mellon University, any method of looking at data that doesn't include formal statistical modeling and inference falls under the term exploratory data analysis.</div>
+<br>
+
+> Notes: It is always a good practice to understand the data first and try to gather as many insights from it.
+
+So, without further ado, let's jump into the analysis! 😉
+
+# B. About the Dataset
+In this opportunity, we use **IMDb User's Rating Dataset** which contain information of 1272 **Indonesian movies**. The data were gathered using IMDb-Scraper and then were converted and cleaned into a .csv file.
+
+## What are IMDb ratings?
+IMDb is an online database of information related to movies, television series, home videos, video games, and streaming content online – including cast, production crew and personal biographies, plot summaries, trivia, ratings, also fan and critical reviews. IMDb registered users can cast a vote (from 1 to 10) on every released title in the database. Individual votes are then aggregated and summarized as a single IMDb rating, visible on the title's main page. 
+
+To calculate the ratings, IMDb uses a weighted average, so that all votes don't have the same impact (or 'weight') on the final rating. The users can update their votes as often as they'd like, but any new vote on the same title will overwrite the previous one, so it is one vote per title per user. 
+
+## Data Overview
+Check the data below for an overview!
+
+```{r}
+# Input the Data and A Glimpse of Them
+movie <- read.csv("data_input/indonesian_movies.csv", header=T, na.strings=c(""))
+head(movie,3) %>% 
+  kable %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = F, position = "center"))
+```
+
+There are 1272 Indonesian movies in the dataset consisting of 11 columns relating to each movie. Those columns are:
+
+- title: movie title
+- year: the release year of movie
+- description: movie synopsis
+- genre: movie genre
+- rating: movie rating (censorship)
+- users_rating: viewer's rating for the movie (1-10)
+- votes: the number of users who gave rating
+- languages: the language used in the movie
+- directors: the director of the movie
+- actors: the list of actors who played in the movie
+- runtime: the time length of a movie (in minutes)
+
+But, before we discuss further about the data, let's take a look into the brief history of Indonesian movies. 
+
+## Brief History of Indonesian Movies
+
+Movies were shown for the first time in Indonesia by the Dutch where they were projected in theatres or rented houses. But, later on, the movie business was dominated by the Chinese. In 1925, they owned most of movie theatres in Indonesia.
+
+Actually, movie-making has been known in Indonesia since 1911, beginning with documentaries made by the crews from Europe, initiated by G. Kruger and F. Carli. Afterwards in 1926, Loetoeng Kasaroeng, a silent fantasy movie which is an adaptation of the Sundanese folktale Lutung Kasarung, made its debut. This was followed by the production of 21 movies (silent and sound) between 1926—1931. The industry grew fast; 41 movies were released in 1941, mostly romance movies combined with music and martial arts.
+
+With Darah dan Doa (1950), Indonesia had its first movie produced by Indonesian production house "Perusahaan Film Nasional (Perfini)". Written and directed by Indonesian director, Usmar Ismail, the movie is often considered the country’s first national feature movie.
+
+# C. Data Preprocessing
+
+Data preprocessing is an essential step to do before we proceed to the analysis. Real-world raw data usually has inconsistent formatting, human errors, and can also be incomplete. Data preprocessing resolves such issues and makes datasets more complete and efficient to perform data analysis. It's a crucial process that can affect the success of data mining and machine learning projects.
+
+In this project, we also do data preprocessing as follows..
+
+```{r}
+# Checking the Data Types
+str(movie)
+```
+There seems to be some data types that don't match, such as:
+
+- `votes` and `runtime` should be **numeric**
+- `year`, `genre`, `rating`, `languages`should be **factor**
+
+In order for our analysis to run smoothly, we have to change their types. However, there are several things that make it difficult for us to make those changes. Some of these things are: the use of `,` for the thousands, the use of the word `min` at runtime, some inefficient (repeated) rating categories, etc. We must fix these first before we proceed into the next step.
+
+```{r}
+# Replacing Characters/Words/Categories that Don't Fit
+movie$votes <- str_replace_all(movie$votes,",","")
+movie$runtime <- str_replace_all(movie$runtime,"min","")
+movie$rating <- str_replace_all(movie$rating,"Not Rated","Unrated")
+movie$rating <- str_replace_all(movie$rating,"Not Rated","Unrated")
+movie$rating <- movie$rating %>% replace_na('Unrated')
+movie$rating <- str_replace_all(movie$rating,"TV-14","13+")
+movie$rating <- str_replace_all(movie$rating,"PG-13","13+")
+movie$rating <- str_replace_all(movie$rating,"R","13+")
+movie$rating <- str_replace_all(movie$rating,"TV-MA","17+")
+movie$rating <- str_replace_all(movie$rating,"D","17+")
+```
+
+Besides, there are also several missing values that we should fill in as long as we can. 
+
+```{r}
+# Checking the Number of Missing Values for Each Column
+colSums(is.na(movie))
+```
+
+>p.s: To fix this case, I browsed on internet so that we get the information which were missing. 
+
+```{r}
+# Filling the Movie Genre
+movie[762,"genre"] <- "Comedy"
+movie[825,"genre"] <- "Comedy"
+movie[827,"genre"] <- "Drama"
+movie[857,"genre"] <- "Drama"
+movie[900,"genre"] <- "Drama"
+movie[939,"genre"] <- "Adventure"
+movie[956,"genre"] <- "Drama"
+movie[963,"genre"] <- "Romance"
+movie[965,"genre"] <- "Drama"
+movie[969,"genre"] <- "Romance"
+movie[1009,"genre"] <- "Drama"
+movie[1015,"genre"] <- "Drama"
+movie[1041,"genre"] <- "Comedy"
+movie[1048,"genre"] <- "Comedy"
+movie[1071,"genre"] <- "Action"
+movie[1076,"genre"] <- "Comedy"
+movie[1085,"genre"] <- "Action"
+movie[1092,"genre"] <- "Romance"
+movie[1100,"genre"] <- "Drama"
+movie[1122,"genre"] <- "Romance"
+movie[1132,"genre"] <- "Drama"
+movie[1137,"genre"] <- "Comedy"
+movie[1139,"genre"] <- "Drama"
+movie[1147,"genre"] <- "Drama"
+movie[1153,"genre"] <- "Comedy"
+movie[1156,"genre"] <- "Drama"
+movie[1159,"genre"] <- "Action"
+movie[1178,"genre"] <- "History"
+movie[1182,"genre"] <- "Adventure"
+movie[1196,"genre"] <- "Action"
+movie[1204,"genre"] <- "History"
+movie[1211,"genre"] <- "Comedy"
+movie[1224,"genre"] <- "Drama"
+movie[1231,"genre"] <- "Romance"
+movie[1240,"genre"] <- "Action"
+movie[1259,"genre"] <- "History"
+```
+
+```{r}
+# Filling the Movie Director
+movie[138,"directors"] <- "Amar Mukhi"
+movie[223,"directors"] <- "Tema Patrosza"
+movie[427,"directors"] <- "Indra Gunawan"
+movie[1023,"directors"] <- "Steady Rimba"
+movie[1047,"directors"] <- "Steady Rimba"
+movie[1256,"directors"] <- "A.N. Alcaff"
+movie[1271,"directors"] <- "Nancing movie Corp."
+```
+
+```{r}
+# Filling the Movie Rating
+movie[movie$title == "Iseng","rating"] <- "21+"
+movie[movie$title == "Wanita Dalam Gairah","rating"] <- "21+"
+movie[movie$title == "Bibir Mer","rating"] <- "21+"
+```
+
+But, there is another problem. If we look closely, we could find some movies with the same titles in our dataset. 
+
+```{r}
+# Checking the Duplicates
+movie[duplicated(movie$title),] %>% 
+  kable %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = F, position = "center"))
+```
+
+However, after I double-checked, this case can be ignored as each title does have two movies with different details (it has the older version and the remake version). So, don't mind it! 😁
+
+Everything is set! Hence, we can change our data types as follows.
+
+```{r}
+# Changing the Data Types
+movie$votes <- as.numeric(movie$votes)
+movie$runtime <- as.numeric(movie$runtime)
+movie[,c("year","genre","rating","languages")] <- lapply(movie[,c("year","genre","rating","languages")],as.factor)
+```
+
+Ups, don't be too happy yet 😏
+
+It seems that we also need 2 new columns containing:
+
+- `id`; to differentiate between movies
+- `users_rating/(votes/sum(votes))`; because it doesn't seem wise to compare the user ratings between movies that get a lot of votes with those that don't get a lot of votes, as a movie with more votes usually has more variation in the viewer's rating, hence, in the final, its rating average is smaller (despite it is selling well and becomes the center of attention)
+
+See below for more details!
+
+```{r}
+# Feature Engineering
+movie$ratingp <- movie$users_rating * (movie$votes/sum(movie$votes))
+movie$id <- 1:nrow(movie)
+```
+
+Don't forget to drop the unused levels in the dataset.
+
+```{r}
+# Dropping Unused Levels
+movie$rating <- droplevels(movie$rating)
+```
+
+Check again for the last time! 😃
+
+```{r}
+# Checking the Data Types (again)
+str(movie)
+```
+
+Finally, it looks like we're good to go, let's proceed to EDA 😍
+
+<p align="center">
+  <img src="https://media.giphy.com/media/nbvFVPiEiJH6JOGIok/giphy.gif" />
+</p>
+
+# D. Exploratory Data Analysis
+
+First of all, we must clearly know our data size.
+
+```{r}
+# Checking the Dimension
+dim(movie)
+```
+
+It looks like our intuition was right. We have 1272 observations (1272 movies), with 13 variables related to each movie (11 of them are from the original dataset, while the 2 of them are the variables that we were just made).
+
+Next, let's take a look into the summary of each variable.
+
+```{r}
+summary(movie)
+```
+
+📋 From the summary above, we can take some points, such as:
+
+1. Of all Indonesian movies listed on IMDb, most movies are:
+    1. Released in 2019
+    2. Having *drama* genre
+    3. Not rated yet
+    4. Using Bahasa Indonesia
+2. The IMDb user's rating for Indonesian movies ranges between 1.2 and 9.4, with mean = 6.144 and median = 6.400. It seems that there are no extreme values as the mean and the median are nearly the same.
+3. The runtime of Indonesian movies ranges between 45 minutes and 262 minutes, with mean = 97.07 minutes and median = 95 minutes. Although there are some missing values in the runtime data.
+4. The number of votes of Indonesian movies in IMDb ranges between 5 and 187222, with mean = 459.4 and median = 27. The large difference between median and mean indicates that only a few movies have a large number of votes, while generally the number of votes is small.
+
+You're allowed to add other insights, as long as they correspond with the summary above 👌
+
+Now, we are going to dismantle our data so that we get some new-amazing facts. Let's go! 🔥
+
+## Top 3 Genres of Indonesian Movies in IMDb Dataset
+
+```{r}
+# Looking for the Top 3 Genres
+genre_most <- as.data.frame(head(sort(table(movie$genre), decreasing = T),3))
+colnames(genre_most)[1] <- 'Genre'
+genre_most %>% 
+  kable(table.attr = "style='width:40%;'") %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = T, position = "center"))
+```
+
+```{r}
+# Showing A Proportion Table
+genre_mostprop <- as.data.frame(head(sort(prop.table(table(movie$genre)), decreasing = T),3))
+colnames(genre_mostprop)[1] <- 'Genre'
+genre_mostprop %>% 
+  kable(table.attr = "style='width:40%;'") %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = T, position = "center"))
+```
+
+The top 3 genres in the dataset are **Drama**, **Comedy**, and **Horror**. This shows that mostly Indonesian film creators often produce these 3 genres as they sell really well in the market. The 3 genres have shown consistent growth in production throughout Indonesian filming history. This result also shows some consistency with the data shown by Managing Partner Ideosource Film Fund (IFF) about the 3 most popular Indonesian film genres from 2008-2018. 
+
+❗There will be no offer if there is no demand
+
+The fact that most Indonesian TV shows are filled with soap operas and comedy shows (where their ratings are also high), make it clear that there really is a lot of demand in these particular genres. Many moms like to watch soap operas because they can relate to the plot as it describes their daily life; providing emotional release, personal gratification, companionship, and an escape from reality. Meanwhile, in terms of horror movies, indeed Indonesia is famous for its mystique, so it is not very surprising that this genre is famous.
+
+```{r, echo=FALSE, out.width='50%', fig.align='center', fig.cap="A Mom is Busy Watching A Soap Opera"}
+knitr::include_graphics("assets/sinetron.jpg")
+```
+
+## Most Favourite Movies Based on IMDb User's Rating {.tabset .tabset-fade .tabset-pills} 
+
+### Top 2
+```{r}
+top2 <- as.data.frame(head(movie[order(movie$ratingp, decreasing = T),'title'],2))
+colnames(top2)[1] <- 'Title'
+top2 %>% 
+  kable(table.attr = "style='width:40%;'") %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = T, position = "center"))
+```
+### Top 3
+```{r}
+top3 <- as.data.frame(head(movie[order(movie$ratingp, decreasing = T),'title'],3))
+colnames(top3)[1] <- 'Title'
+top3 %>% 
+  kable(table.attr = "style='width:40%;'") %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = T, position = "center"))
+```
+
+### Top 5
+```{r}
+top5 <- as.data.frame(head(movie[order(movie$ratingp, decreasing = T),'title'],5))
+colnames(top5)[1] <- 'Title'
+top5 %>% 
+  kable(table.attr = "style='width:40%;'") %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = T, position = "center"))
+```
+
+### Top 10
+```{r}
+top10 <- as.data.frame(head(movie[order(movie$ratingp, decreasing = T),'title'],10))
+colnames(top10)[1] <- 'Title'
+top10 %>% 
+  kable(table.attr = "style='width:40%;'") %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = T, position = "center"))
+```
+
+## Best Actor Based on IMDb User's Rating {.tabset .tabset-fade .tabset-pills}
+
+<p align="center">
+  <img src="https://media.giphy.com/media/AbDCwAI2xTwTm/giphy.gif" height="300" width="250" />
+</p>
+
+The best actor predicate is determined from the median value of user's rating obtained from all the movies that have been played. 
+
+But, before we proceed to the calculations, we have to change some part of the data so that the analysis can be carried out.
+
+```{r}
+# Removing Some Characters
+movie$actors <- str_replace_all(movie$actors,"\\[","")
+movie$actors <- str_replace_all(movie$actors,"\\]","")
+```
+
+```{r}
+# Making A Data Frame which Consists of the Actor Name and Acting Frequency
+dt <- data.table(movie)
+movie_actor <- dt[,strsplit(actors,", ",fixed = T),by = c("id","ratingp")]
+freqactor <- (as.data.frame(sort(table(movie_actor$V1), decreasing = T)))[-1,]
+```
+
+Besides considering the rating, we also have to consider the number of movies they have been played (seniority).
+
+```{r}
+# Making A Data Frame which Consists of Senior Actors
+topfreqactor <- freqactor[freqactor$Freq >= 20,]
+colnames(topfreqactor)[1] <- "actor_name"
+```
+
+```{r}
+# Calculating the Median of User's Rating
+actor_rating <- aggregate(ratingp ~ V1, data = movie_actor, FUN = median)
+colnames(actor_rating)[1] <- "actor_name"
+```
+
+```{r}
+# Merging the Median Values with the Table of Senior Actors
+topratingactor <- merge(x=topfreqactor,y=actor_rating,by="actor_name",all.x=TRUE)
+```
+
+### Top 3
+```{r}
+head(topratingactor[order(topratingactor$ratingp, decreasing = T),],3) %>% 
+  kable(table.attr = "style='width:80%;'", row.names = FALSE) %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = T, position = "center"))
+```
+### Top 5
+```{r}
+head(topratingactor[order(topratingactor$ratingp, decreasing = T),],5) %>% 
+  kable(table.attr = "style='width:80%;'", row.names = FALSE) %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = T, position = "center"))
+```
+
+## Best Director Based on IMDb User's Rating {.tabset .tabset-fade .tabset-pills}
+
+The process of determining the best director is the same as determining the best actor. We also have to consider the number of movies they have been produced.
+
+Look at the details below!
+
+```{r}
+# Making A Data Frame which Consists of the Director Name and the Number of Movies that They Produced
+freqdirector <- as.data.frame(sort(table(movie$directors), decreasing = T))
+```
+
+```{r}
+# Making A Data Frame which Consists of Senior Directors
+topfreqdirector <- freqdirector[freqdirector$Freq >= 5,]
+colnames(topfreqdirector)[1] <- "directors"
+```
+
+```{r}
+# Calculating the Median of User's Rating
+director_rating <- aggregate(ratingp ~ directors, data = movie, FUN = median)
+```
+
+```{r}
+# Merging the Median Values with the Table of Senior Directors
+topratingdirector <- merge(x=topfreqdirector,y=director_rating,by="directors",all.x=TRUE)
+```
+
+### Top 3
+```{r}
+head(topratingdirector[order(topratingdirector$ratingp,decreasing = T),],3) %>% 
+  kable(table.attr = "style='width:80%;'", row.names = FALSE) %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = T, position = "center"))
+```
+
+Maybe I will suffice the analysis here. You can freely explore more about this data by downloading them from the `download` tab. 
+
+See you next time! 👋
+
+<p align="center">
+  <img src="https://media.giphy.com/media/vxNCVEe0PI9A3YVJEX/giphy.gif" />
+</p>
+
+### Top 5
+```{r}
+head(topratingdirector[order(topratingdirector$ratingp,decreasing = T),],5) %>% 
+  kable(table.attr = "style='width:80%;'", row.names = FALSE) %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = T, position = "center"))
+```
+
+Maybe I will suffice the analysis here. You can freely explore more about this data by downloading them from the `download` tab. 
+
+See you next time! 👋
+
+<p align="center">
+  <img src="https://media.giphy.com/media/vxNCVEe0PI9A3YVJEX/giphy.gif" />
+</p>
+
+# E. Download Dataset (Cleaned)
+
+```{r echo=FALSE}
+movie %>%
+  download_this(
+    output_name = "movie_clean",
+    output_extension = ".csv",
+    button_label = "Download Data",
+    button_type = "warning",
+    has_icon = TRUE,
+    icon = "fa fa-save"
+  )
+```
+<br>
+
+```{r echo=FALSE}
+movie %>% 
+  kable %>%
+  kable_paper() %>%
+  row_spec(0, background = "#FF8181") %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive", full_width = F, position = "center")) %>% 
+  scroll_box(width = "645px", height = "400px")  
+```
+
+# F. References
+
+[Dataset Source](https://www.kaggle.com/datasets/dionisiusdh/imdb-indonesian-movies?resource=download)
+
+[How are IMDb's Ratings calculated?](https://help.imdb.com/article/imdb/track-movies-tv/ratings-faq/G67Y87TFYYP6TWAV#)
+
+[Brief History of the Indonesian Movies](https://www.proquest.com/openview/62f8fd48a5db64276f45500474dc09f7/1?pq-origsite=gscholar&cbl=29010)
+
+[Most Famous Genres in Indonesian Movies](https://www.cnbcindonesia.com/lifestyle/20180504090055-33-13588/ini-deretan-genre-film-paling-diminati-penonton-indonesia)
+
+
+
+
